@@ -377,7 +377,7 @@ def data_loader(dataset, batch_size=50): # flag = train
 @torch.no_grad() # torch.inference_mode is preferable, but this is fine as long as no runtime error
 def evaluate(model, dataset, batch_size=50, max_batches=None):
     model.eval()
-    _, loader = data_loader(dataset)
+    _, loader = data_loader(dataset, batch_size)
     losses = []
     for i, (xspt, yspt) in enumerate(loader):
         logits, loss = model(xspt, yspt)
