@@ -24,17 +24,18 @@ class MultiHeadAttention(nn.Module):
     """
     def __init__(self, config):
         super().__init__()
-        self.register_buffer("attn_mask", torch.tril(torch.ones(config.block_size, config.block_size)).view(1, config.block_size, config.block_size))
+        self.register_buffer("attn_mask", torch.tril(torch.ones(config.block_size, config.block_size)).view(1, 1, config.block_size, config.block_size))
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, queries, keys, values):
         # Swap block_size and num_head, i.e., B, L, H, D -> B, H, L, D
+        _, L, _, _ = queries.shape
         queries = queries.transpose(1, 2)
         keys = keys.transpose(1, 2)
         values = values.transpose(1, 2)
         
         attn = (queries @ keys.transpose(-2, -1)) / math.sqrt(keys.shape[-1]) # Scaled dot product between queries and keys
-        attn_masked = attn.masked_fill(self.attn_mask == 0, float('-inf')) # Masking
+        attn_masked = attn.masked_fill(self.attn_mask[:, :, :L, :L] == 0, float('-inf')) # Masking
         p_masked = self.dropout(F.softmax(attn_masked, dim=-1)) # Softmax and dropout
 
         y = (p_masked @ values).transpose(1, 2).contiguous() # Weighted average of values
@@ -97,7 +98,7 @@ class Decoder(nn.Module):
         super().__init__()
         self.vocal_size = vocal_size
         self.block_size = config.block_size
-        self.tok_emb_layer = nn.Embedding(self.vocal_size + 1, config.d_model) # token embedding
+        self.tok_emb_layer = nn.Embedding(self.vocal_size, config.d_model) # token embedding
         self.pos_emb_layer = nn.Embedding(config.block_size, config.d_model) # positional embedding
         self.layers = nn.ModuleList([
             DecoderLayer(config, AttentionLayer(config, MultiHeadAttention(config))) for _ in range(config.n_layer)
@@ -108,8 +109,9 @@ class Decoder(nn.Module):
         return self.block_size
 
     def forward(self, idx, targets=None):
-        
-        x = self.tok_emb_layer(idx) + self.pos_emb_layer(torch.arange(0, 16).unsqueeze(0))
+        B, L = idx.shape
+
+        x = self.tok_emb_layer(idx) + self.pos_emb_layer(torch.arange(0, L).unsqueeze(0))
         for block in self.layers:
             x = block(x) 
         logits = self.lm_head(x)
