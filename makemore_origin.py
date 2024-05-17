@@ -278,24 +278,6 @@ class MLP(nn.Module):
         return logits, loss 
 
 # -----------------------------------------------------------------------------
-# Helper function to generate samples and evaluate
-@torch.no_grad()
-def generate(model):
-    model.eval()
-    out = [0]
-    while True:
-        logits, _ = model(torch.tensor(out).unsqueeze(0))
-        logits = logits[:, -1, :]
-        p = F.softmax(logits, dim=1)
-        id = torch.multinomial(p, 1, replacement=True).item()
-        out.append(id)
-        if id == 0:
-            break
-    
-    model.train()
-    return(list(filter(lambda x: x > 0, out))) # filtering out 0
-
-# -----------------------------------------------------------------------------
 # Helper function to create data loader
 class CharDataset(Dataset):
     """
