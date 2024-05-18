@@ -105,8 +105,9 @@ class Decoder(nn.Module):
 
     def forward(self, idx, targets=None):
         B, L = idx.shape
+        device = idx.device
 
-        x = self.tok_emb_layer(idx) + self.pos_emb_layer(torch.arange(0, L).unsqueeze(0))
+        x = self.tok_emb_layer(idx) + self.pos_emb_layer(torch.arange(0, L, dtype=torch.long, device=device).unsqueeze(0))
         for block in self.layers:
             x = block(x) 
         logits = self.lm_head(x)

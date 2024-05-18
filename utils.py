@@ -34,10 +34,10 @@ def set_random_seed(seed):
 # -----------------------------------------------------------------------------
 # Helper function to generate samples and print 
 @torch.no_grad()
-def generate(model, train_dataset, batch_size, temperature=1, do_sample=True, top_k=None):
+def generate(model, train_dataset, config, batch_size, temperature=1, do_sample=True, top_k=None):
     model.eval()
     max_word_length = train_dataset.get_output_length()
-    id = torch.zeros((batch_size, 1), dtype=torch.long)
+    id = torch.zeros((batch_size, 1), dtype=torch.long, device=config.device)
     for _ in range(max_word_length - 1):
         logits, _ = model(id)
         logits = logits[:, -1, :].squeeze(1) / temperature
@@ -140,11 +140,13 @@ def configure_optimizer(model, config):
 # -----------------------------------------------------------------------------
 # Helper function to evaluate
 @torch.no_grad() # torch.inference_mode is preferable, but this is fine as long as no runtime error
-def evaluate(model, dataset, batch_size=50, max_batches=None):
+def evaluate(model, dataset, config, batch_size=64, max_batches=None):
     model.eval()
     _, loader = data_loader(dataset, batch_size)
     losses = []
     for i, (xspt, yspt) in enumerate(loader):
+        xspt = xspt.to(config.device)
+        yspt = yspt.to(config.device)
         logits, loss = model(xspt, yspt)
         losses.append(loss.item())
         if max_batches is not None and i >= max_batches:
