@@ -11,11 +11,6 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 import math
 
-# system inits
-torch.manual_seed(714)
-torch.cuda.manual_seed_all(714)
-random.seed(714)
-
 # -----------------------------------------------------------------------------
 # Decoder language model
 class MultiHeadAttention(nn.Module):
@@ -346,7 +341,7 @@ def create_dataset(file_path, ratio=[0.1, 0.1]):
 
     return train_dataset, val_dataset, test_dataset, chars, max_word_length
 
-def data_loader(dataset, batch_size=50): # flag = train
+def data_loader(dataset, batch_size=64): # flag = train
 
     dataloader = DataLoader(
         dataset,
@@ -356,18 +351,3 @@ def data_loader(dataset, batch_size=50): # flag = train
     
     return dataset, dataloader
 
-# -----------------------------------------------------------------------------
-# Helper function to evaluate
-@torch.no_grad() # torch.inference_mode is preferable, but this is fine as long as no runtime error
-def evaluate(model, dataset, batch_size=50, max_batches=None):
-    model.eval()
-    _, loader = data_loader(dataset, batch_size)
-    losses = []
-    for i, (xspt, yspt) in enumerate(loader):
-        logits, loss = model(xspt, yspt)
-        losses.append(loss.item())
-        if max_batches is not None and i >= max_batches:
-            break
-    mean_loss = torch.tensor(losses).mean().item()
-    model.train() # reset model back to training mode
-    return mean_loss
