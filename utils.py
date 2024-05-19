@@ -4,6 +4,7 @@ import math
 import random
 import numpy as np
 from makemore_origin import data_loader
+import pandas as pd
 
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
@@ -154,3 +155,22 @@ def evaluate(model, dataset, config, batch_size=64, max_batches=None):
     mean_loss = torch.tensor(losses).mean().item()
     model.train() # reset model back to training mode
     return mean_loss
+
+# -----------------------------------------------------------------------------
+# Helper function to diagnose the data and grad of parameters
+def diagnose(model):
+    d = {'layer_name': [], 'param_shape': [], 'data_mean': [], 'data_std': [], 'grad_mean': [], 'grad_std': [], 'grad_data_ratio': []}
+
+    for i, (name, params) in enumerate(model.named_parameters()):
+        t = params.grad
+        d['layer_name'].append(name)
+        d['param_shape'].append(tuple(params.shape))
+        d['data_mean'].append(params.mean().item())
+        d['data_std'].append(params.std().item())
+        d['grad_mean'].append(t.mean().item())
+        d['grad_std'].append(t.std().item())
+        d['grad_data_ratio'].append((t.std() / params.std()).item())
+
+    df = pd.DataFrame.from_dict(d)
+
+    return df.sort_values(by=['grad_std'])
