@@ -19,8 +19,12 @@ class MultiHeadAttention(nn.Module):
     """
     def __init__(self, config):
         super().__init__()
-        self.register_buffer("attn_mask", torch.tril(torch.ones(config.block_size, config.block_size)).view(1, 1, config.block_size, config.block_size))
-        self.dropout = nn.Dropout(config.dropout)
+        self.dropout = config.dropout
+        self.dropout_layer = nn.Dropout(config.dropout)
+        self.flash = hasattr(F, 'scaled_dot_product_attention') # flash attention uses SRAM with high bandwidth and low memory size to calculate attention in once
+        # https://gordicaleksa.medium.com/eli5-flash-attention-5c44017022ad
+        if not self.flash:
+            self.register_buffer("attn_mask", torch.tril(torch.ones(config.block_size, config.block_size)).view(1, 1, config.block_size, config.block_size))
 
     def forward(self, queries, keys, values):
         # Swap block_size and num_head, i.e., B, L, H, D -> B, H, L, D
@@ -29,11 +33,17 @@ class MultiHeadAttention(nn.Module):
         keys = keys.transpose(1, 2)
         values = values.transpose(1, 2)
         
-        attn = (queries @ keys.transpose(-2, -1)) / math.sqrt(keys.shape[-1]) # Scaled dot product between queries and keys
-        attn_masked = attn.masked_fill(self.attn_mask[:, :, :L, :L] == 0, float('-inf')) # Masking
-        p_masked = self.dropout(F.softmax(attn_masked, dim=-1)) # Softmax and dropout
+        if self.flash:
+            # efficient attention using Flash Attention CUDA kernels
+            y = F.scaled_dot_product_attention(queries, keys, values, attn_mask=None, dropout_p=self.dropout, is_causal=True)
+        else:
+            attn = (queries @ keys.transpose(-2, -1)) / math.sqrt(keys.shape[-1]) # Scaled dot product between queries and keys
+            attn_masked = attn.masked_fill(self.attn_mask[:, :, :L, :L] == 0, float('-inf')) # Masking
+            p_masked = self.dropout_layer(F.softmax(attn_masked, dim=-1)) # Softmax and dropout
 
-        y = (p_masked @ values).transpose(1, 2).contiguous() # Weighted average of values
+            y = p_masked @ values # Weighted average of values
+
+        y = y.transpose(1, 2).contiguous()
 
         return y
     
